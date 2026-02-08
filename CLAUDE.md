@@ -52,6 +52,7 @@
 - **Do NOT use NeoPixel writes during WiFi/serial comms** — NeoPixel disables interrupts and corrupts UART data from ESP8285
 - **Do NOT call `WiFi.scanNetworks()`** — `AT+CWLAP` disconnects from the AP and with weak signal it can't reconnect
 - `WiFiServer` works but outgoing HTTP connections disrupt the listener — call `server.begin()` again after each outbound fetch
+- When serving HTTP responses, call `client.flush()` + `delay(500)` before `client.stop()` — ESP8285 AT firmware needs time to send buffered data over the wire, otherwise Chrome gets `ERR_CONNECTION_RESET`
 - WiFi signal is weak (-90 to -94 dBm) — drops frequently, needs auto-reconnect logic with 30s cooldown between attempts
 - Has onboard **NeoPixel** on pin `NEOPIXEL` (GPIO 11) and LED on `LED_BUILTIN` (GPIO 12)
 - Library installed: `WiFiEspAT@1.5.0`, `Adafruit NeoPixel@1.15.3`
