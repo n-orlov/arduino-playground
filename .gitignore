@@ -1,0 +1,5 @@
+.env
+*.ps1
+serial_log.txt
+serial_err.txt
+find_env.ps1
