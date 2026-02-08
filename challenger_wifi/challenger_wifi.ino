@@ -291,7 +291,8 @@ void serveClient(WiFiClient& client) {
   client.println("<p style='margin-top:2em;color:#555'>Auto-refreshes every 30s</p>");
   client.println("</body></html>");
 
-  delay(10);
+  client.flush();
+  delay(500); // let ESP8285 AT firmware finish sending over the wire
   client.stop();
 }
 
