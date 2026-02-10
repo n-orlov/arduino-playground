@@ -14,7 +14,8 @@
 ## Connected Hardware
 
 - **Arduino UNO R4 WiFi** on **COM7** (FQBN: `arduino:renesas_uno:unor4wifi`, Core: `arduino:renesas_uno`)
-- **1602A v1.2 LCD** (16x2, parallel 4-bit mode) — wired: RS=8, E=9, D4=4, D5=5, D6=6, D7=7
+- **1602A v1.2 LCD** (16x2, parallel 4-bit mode) — wired: RS=8, E=9, D4=4, D5=5, D6=6, D7=7 *(conflicts with TFT shield — cannot use both)*
+- **3.5" TFT LCD Shield** (480x320, ILI9486, 8-bit parallel) — plugs directly onto UNO headers, includes resistive touchscreen + SD card slot
 - **Challenger NB RP2040 WiFi** on **COM8** (FQBN: `rp2040:rp2040:challenger_nb_2040_wifi`, Core: `rp2040:rp2040`)
 - Unknown device on **COM3**
 
@@ -26,6 +27,20 @@
 - **WiFiSSLClient fails** for some hosts (e.g. `api.open-meteo.com`). Use plain `WiFiClient` on port 80 when the API supports it
 - First TCP connection after WiFi join often fails — **add a retry loop** (3 attempts, 2s backoff) for `client.connect()`
 - After `WiFi.begin()` connects, add a short `delay(1000)` before making HTTP requests
+
+## TFT Shield Notes (3.5" ILI9486)
+
+- **Driver IC**: ILI9486 (confirmed via register 0xD3 readback = 0x94)
+- **Interface**: 8-bit parallel on standard UNO shield pinout — D2-D9 (data), A0(RD), A1(WR), A2(RS), A3(CS), A4(RST)
+- **Resolution**: 480x320, 16-bit colour (RGB565)
+- **Library**: `MCUFRIEND_kbv@3.0.0` with custom Renesas section in `utility/mcufriend_shield.h`
+- **Critical R4 WiFi issue**: Renesas RA4M1 uses **per-pin PFS registers** for GPIO control. Port-wide PODR register writes have **no effect** after `pinMode()` configures the PFS. All GPIO must use `digitalWrite()`/`digitalRead()`
+- The custom Renesas section in `mcufriend_shield.h` uses `digitalWrite()` for all pin access — works correctly but is slow (~30s for full-screen fill)
+- **Optimisation tip**: Avoid `fillScreen()` — update only changed regions. Full dashboard redraw takes ~6s which is acceptable for a 10 min refresh cycle
+- **No RTC**: R4 WiFi has no real-time clock. Parse `HH:MM` from Open-Meteo API's `"time"` field in the `"current"` block (format: `"2024-01-15T17:30"`)
+- The shield occupies **all** UNO data pins — cannot use LED matrix, 1602A LCD, or other shields simultaneously
+- **Waveshare_ILI9486** library (SPI-based) does NOT work — it's for Waveshare-specific shields with onboard shift registers, not generic 8-bit parallel shields
+- Library installed: `MCUFRIEND_kbv@3.0.0-Release`, `Adafruit GFX Library@1.12.4`, `Adafruit BusIO@1.17.4`
 
 ## LCD Notes (1602A)
 
@@ -39,6 +54,8 @@
 - `weather/` — Fetches temperature for Spalding, UK from Open-Meteo API (plain HTTP, port 80) and displays rounded value on LED matrix. Refreshes every 10 minutes
 - `weather_station/` — Combined weather station: rounded temp on LED matrix, full details (temp, humidity, wind, conditions) on 1602A LCD. Uses Open-Meteo API, refreshes every 10 minutes
 - `lcd_test/` — LCD diagnostic sketch
+- `tft_test/` — TFT shield diagnostic: ILI9486 driver identification and colour band test
+- `tft_weather/` — TFT weather dashboard: rich graphical display (large temp, weather icons, humidity/wind gauges, 24h temp chart, current time) on 480x320 TFT. Uses Open-Meteo API, refreshes every 10 min. ~38% flash, ~31% RAM
 - `challenger_wifi/` — Weather dashboard: fetches Spalding weather via WiFi, shows temp as NeoPixel colour (blue→cyan→green→yellow→red), and runs a web server with live dashboard (weather + board status). Auto-reconnects on WiFi drop. Refreshes every 10 min (weather) / 30s (web page)
 
 ## Board Notes (Challenger NB RP2040 WiFi)

@@ -25,6 +25,8 @@ float curTemp = -999;
 float curHumidity = -999;
 float curWind = -999;
 int curWeatherCode = -999;
+String curTime = "";            // API observation time (ISO 8601)
+unsigned long lastFetchMs = 0;  // millis() when weather was last fetched
 
 
 Adafruit_NeoPixel pixel(1, NEOPIXEL, NEO_GRB + NEO_KHZ800);
@@ -58,7 +60,9 @@ void setPixel(uint8_t r, uint8_t g, uint8_t b) {
 
 const char* weatherDesc(int code) {
   if (code == 0) return "Clear sky";
-  if (code <= 3) return "Partly cloudy";
+  if (code == 1) return "Mainly clear";
+  if (code == 2) return "Partly cloudy";
+  if (code == 3) return "Overcast";
   if (code <= 49) return "Fog";
   if (code <= 59) return "Drizzle";
   if (code <= 69) return "Rain";
@@ -181,11 +185,27 @@ void fetchWeather() {
     return;
   }
 
+  // Extract observation time from "time":"2026-02-08T21:30"
+  String timeStr = "";
+  int timeIdx = response.indexOf("\"time\":\"");
+  // Skip the first "time" (in current_units) — find the one in "current" block
+  if (timeIdx != -1) {
+    int secondIdx = response.indexOf("\"time\":\"", timeIdx + 1);
+    if (secondIdx != -1) timeIdx = secondIdx;
+  }
+  if (timeIdx != -1) {
+    int start = timeIdx + 8; // skip past "time":"
+    int end = response.indexOf('"', start);
+    if (end != -1) timeStr = response.substring(start, end);
+  }
+
   // Cache values
   curTemp = temp;
   curHumidity = humidity;
   curWind = wind;
   curWeatherCode = weatherCode;
+  curTime = timeStr;
+  lastFetchMs = millis();
 
   Serial.println("Spalding, UK:");
   Serial.print("  Temperature: "); Serial.print(temp, 1); Serial.println(" C");
@@ -272,6 +292,16 @@ void serveClient(WiFiClient& client) {
     if (curWeatherCode > -998) {
       client.print("<tr><td>Conditions</td><td>"); client.print(weatherDesc(curWeatherCode)); client.println("</td></tr>");
     }
+    if (curTime.length() > 0) {
+      client.print("<tr><td>Observation</td><td>"); client.print(curTime); client.println(" UTC</td></tr>");
+    }
+    if (lastFetchMs > 0) {
+      unsigned long ago = (millis() - lastFetchMs) / 1000;
+      client.print("<tr><td>Fetched</td><td>");
+      if (ago < 60) { client.print(ago); client.print("s ago"); }
+      else { client.print(ago / 60); client.print("m ago"); }
+      client.println("</td></tr>");
+    }
     client.println("</table>");
   } else {
     client.println("<p>Waiting for first weather fetch...</p>");
@@ -288,7 +318,9 @@ void serveClient(WiFiClient& client) {
   client.print("<tr><td>CPU temp</td><td>"); client.print(analogReadTemp(), 1); client.println(" &deg;C</td></tr>");
   client.println("</table>");
 
-  client.println("<p style='margin-top:2em;color:#555'>Auto-refreshes every 30s</p>");
+  client.print("<p style='margin-top:2em;color:#555'>Page loaded at uptime ");
+  client.print(uptimeStr());
+  client.println(" &middot; auto-refreshes every 30s</p>");
   client.println("</body></html>");
 
   client.flush();
